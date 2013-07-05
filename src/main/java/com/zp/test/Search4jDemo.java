@@ -5,9 +5,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang.StringUtils;
 
@@ -24,19 +21,6 @@ import com.zp.search.SuggestSearch;
 
 public class Search4jDemo
 {
-    //线程池的容量
-    private static final int POOL_SIZE = 30;
-    //线程池
-    private static final int corePoolSize = 2;
-    private static final int maxPoolSize = 15;
-    private static final int keepAliveTime = 10;
-    private static final int workQueue = 20;
-    
-    /** 线程池 */
-    private static ThreadPoolExecutor exec = new ThreadPoolExecutor(corePoolSize, maxPoolSize,
-                    keepAliveTime, TimeUnit.SECONDS,
-                    new ArrayBlockingQueue<Runnable>(workQueue),
-                    new ThreadPoolExecutor.CallerRunsPolicy());
     
     public static JedisPool jp = null;
 
@@ -108,7 +92,7 @@ public class Search4jDemo
         {
             System.out.println("以行为单位读取文件内容，一次读一整行：");
             ClassLoader loader = Thread.currentThread().getContextClassLoader();
-            InputStream resourceAsStream = loader.getResourceAsStream("userLibrary.dic");       
+            InputStream resourceAsStream = loader.getResourceAsStream("chinese-names.txt");       
             InputStreamReader inputStreamReader = new InputStreamReader(resourceAsStream);
             reader = new BufferedReader(inputStreamReader);
             String tempString = null;
@@ -158,48 +142,22 @@ public class Search4jDemo
         jp.returnResource(jedis);// 将jedis放回pool中
     }
     
- 
-    public static void mutliTest(final String key)
-    {
-        exec.execute(
-           new Thread() {
-               public void run() {
-                    try
-                    {
-                        suggest(key);
-                    }
-                    catch (Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-               }
-           }
-       );
+    public static void flushdb()
+    {   
+        Jedis jedis = jp.getResource();
+        
+        jedis.flushDB();
+        
+        jp.returnResource(jedis);// 将jedis放回pool中
     }
+
     
     
     
     public static void main(String[] args)
     {
         //addSuggest();
-        for (int i = 0; i < 10000; i++)
-        {
-            System.err.println("---------"+i+"---------");
-            exec.execute(
-                new Thread() {
-                    public void run() {
-                         try
-                         {
-                             suggest("项目");
-                         }
-                         catch (Exception e)
-                         {
-                             e.printStackTrace();
-                         }
-                    }
-                }
-            );
-        }
+        suggest("x");
     }
     
     
