@@ -17,11 +17,9 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.SortingParams;
 
 import com.chenlb.mmseg4j.ComplexSeg;
-import com.chenlb.mmseg4j.Dictionary;
 import com.chenlb.mmseg4j.MMSeg;
 import com.chenlb.mmseg4j.Seg;
 import com.chenlb.mmseg4j.Word;
-import com.google.gson.Gson;
 import com.sun.tools.jdi.LinkedHashMap;
 
 /**
@@ -30,30 +28,6 @@ import com.sun.tools.jdi.LinkedHashMap;
  */
 public class Search
 {
-
-    static List<String> indexed_models;
-
-    static SearchConfig config;
-
-    static Dictionary dic;
-
-    public static SearchConfig configure()
-    {
-        if (null == config)
-        {
-            config = new SearchConfig();
-        }
-
-        if (null == config.disable_mmseg)
-        {
-            dic = Dictionary.getInstance();
-        }
-
-        return config;
-    }
-
-
-
     /**
      * 自动补全 
      * @param type
@@ -63,15 +37,15 @@ public class Search
      */
     public static List<String> complete(String type, String w, Map options)
     {
-        Jedis jedis = Search.configure().redisPool.getResource();
-        int limit = (Integer) (options.get("limit") != null ? options.get("limit") : 10);
-        Map<String, String> conditions = (Map<String, String>) (options.get("conditions") != null ? options
-                .get("conditions") : new HashMap<String, String>());
+        Jedis jedis = SearchConfig.redisPool.getResource();
+        int limit = (Integer) (options.get("limit") == null ?  10 : options.get("limit"));
+        Map<String, String> conditions = (Map<String, String>) (options.get("conditions") == null ?
+                new HashMap<String, String>()  : options.get("conditions"));
         if ((StringUtils.isBlank(w) && conditions.isEmpty()) || (StringUtils.isBlank(type)))
             return new ArrayList<String>();
         Set<String> prefix_matches = new HashSet<String>();
 
-        int range_len = Search.config.complete_max_length;
+        int range_len = SearchConfig.complete_max_length;
         String prefix = w.toLowerCase();
         String key = Search.mk_complete_key(type);
         Long start = jedis.zrank(key, prefix);
@@ -89,25 +63,24 @@ public class Search
                 for (String entry : range)
                 {
                     int min_len = Math.min(entry.length(), prefix.length());
-                    if (entry.substring(0, min_len - 1).equals(prefix.substring(0, (min_len - 1))))
+                    if (!entry.substring(0, min_len).equals(prefix.substring(0, min_len)))
                     {
                         count = prefix_matches.size();
                         break;
                     }
                     if (entry.endsWith("*") && prefix_matches.size() != count)
                     {
-                        prefix_matches.add(entry.substring(0, (entry.length() - 1)));
+                        prefix_matches.add(entry.substring(0, entry.length()-1));
                     }
                 }
 
                 if (start >= range.size())
                 {
                     range = new ArrayList<String>();
-
                 }
                 else
                 {
-                    range = range.subList(start.intValue(), (int) Math.min((max_range - 1), (range.size() - 1)));
+                    range = range.subList(start.intValue(), (int) Math.min(max_range ,range.size()));
                 }
             }
         }
@@ -122,7 +95,7 @@ public class Search
         // 组合特别 key ,但这里不会像 query 那样放入 words， 因为在 complete 里面 words 是用 union
         // 取的，condition_keys 和 words 应该取交集
         List<String> condition_keys = new ArrayList<String>();
-        if (null == conditions || conditions.isEmpty())
+        if (null != conditions && !conditions.isEmpty())
         {
             // if (conditions instanceof ArrayList) {
             // conditions = conditions.subList(0, 1);
@@ -140,12 +113,13 @@ public class Search
 
         // 按词搜索
         String temp_store_key = "tmpsunionstore:" + StringUtils.join(words, "+");
-        if (words.size() > 0)
+        if (words.size() > 1)
         {
             if (!jedis.exists(temp_store_key))
             {
                 // 将多个词语组合对比，得到并集，并存入临时区域
-                jedis.sunionstore(temp_store_key, (String[]) words.toArray());
+                String[] arr = (String[])words.toArray(new String[words.size()]);
+                jedis.sunionstore(temp_store_key, arr);
                 // 将临时搜索设为1天后自动清除
                 jedis.expire(temp_store_key, 86400);
             }
@@ -162,16 +136,16 @@ public class Search
             }
         }
 
-        if (null != condition_keys || !condition_keys.isEmpty())
+        if (null != condition_keys && !condition_keys.isEmpty())
         {
-            if (null == words || words.isEmpty())
+            if (null != words && !words.isEmpty())
             {
                 condition_keys.add(temp_store_key);
             }
             temp_store_key = "tmpsinterstore:" + StringUtils.join(condition_keys, "+");
             if (!jedis.exists(temp_store_key))
             {
-                jedis.sinterstore(temp_store_key, (String[]) condition_keys.toArray());
+                jedis.sinterstore(temp_store_key, (String[])condition_keys.toArray(new String[condition_keys.size()]));
                 jedis.expire(temp_store_key, 86400);
             }
         }
@@ -191,26 +165,28 @@ public class Search
      * @return
      * @throws Exception
      */
-    public static List<String> query(String type, String text, LinkedHashMap options) throws Exception
+    public static List<String> query(String type, String text, Map options) throws Exception
     {
-        Jedis jedis = Search.configure().redisPool.getResource();
-        long tm = System.currentTimeMillis();
+        Jedis jedis = SearchConfig.redisPool.getResource();
         List<String> result = new ArrayList<String>();
-        int limit = (Integer) (options.get("limit") != null ? options.get("limit") : 10);
+        int limit = (Integer) (options.get("limit") == null ?  10 : options.get("limit"));
 
-        String sort_field = (String) (options.get("sort_field") != null ? options.get("sort_field") : "id");
-        Map<String, String> conditions = (Map<String, String>) (options.get("conditions") != null ? options
-                .get("conditions") : new HashMap<String, String>());
+        String sort_field = (String) (options.get("sort_field") == null ? "id":options.get("sort_field"));
+        Map<String, String> conditions = (Map<String, String>) (options.get("conditions") == null ? 
+                new HashMap<String, String>()  : options.get("conditions"));
 
         if ((StringUtils.isBlank(text)) && (null == conditions || conditions.isEmpty()))
             return new ArrayList<String>();
 
         List<String> words = Search.split(text);
+        List<String> wordList = new ArrayList<String>();
         for (String w : words)
         {
-            words.add(Search.mk_sets_key(type, w));
+            wordList.add(Search.mk_sets_key(type, w));
         }
-
+        words.clear();
+        words.addAll(wordList);
+        
         List<String> condition_keys = new ArrayList<String>();
         if (null != conditions && !conditions.isEmpty())
         {
@@ -237,12 +213,13 @@ public class Search
         {
             if (!jedis.exists(temp_store_key))
             {
-                jedis.sinterstore(temp_store_key, (String[]) words.toArray());
+                String[] arr = (String[])words.toArray(new String[words.size()]);
+                jedis.sinterstore(temp_store_key, arr);
                 jedis.expire(temp_store_key, 86400);
             }
 
             // 搜索拼音
-            if (Search.config.pinyin_match)
+            if (SearchConfig.pinyin_match)
             {
                 List<String> pinyin_words = new ArrayList<String>();
                 List<String> pinyin_words_temp = Search.split_pinyin(text);
@@ -256,10 +233,10 @@ public class Search
 
                 String temp_sunion_key = "tmpsunionstore:" + StringUtils.join(pinyin_words, "+");
                 String temp_pinyin_store_key = StringUtils.EMPTY;
-                if (Search.config.pinyin_match)
+                if (SearchConfig.pinyin_match)
                     temp_pinyin_store_key = "tmpinterstore:" + StringUtils.join(pinyin_words, "+");
                 // 找出拼音的
-                jedis.sinterstore(temp_pinyin_store_key, (String[]) pinyin_words.toArray());
+                jedis.sinterstore(temp_pinyin_store_key, (String[])pinyin_words.toArray(new String[pinyin_words.size()]));
 
                 String[] arr_temp =
                 { temp_store_key, temp_pinyin_store_key };
@@ -274,10 +251,7 @@ public class Search
         }
         else
         {
-            // if (words.size() == 1) {
-            // temp_store_key = words.first()
-            // }
-            return result;
+            temp_store_key = words.get(0);
         }
 
         SortingParams sort_params = new SortingParams().limit(0, limit).by(Search.mk_score_key(type, "*")).desc();
@@ -316,7 +290,7 @@ public class Search
     public static List<String> hmget(Jedis jedis, String type, List<String> ids, LinkedHashMap options)
     {
         List<String> result = new ArrayList<String>();
-        String sort_field = (String) (options.get("sort_field") == null ? "id" : options.get("sort_field"));
+        //String sort_field = (String) (options.get("sort_field") == null ? "id" : options.get("sort_field"));
         if (null == ids || ids.isEmpty())
         {
             return result;
@@ -333,8 +307,7 @@ public class Search
 
             for (String r : list)
             {
-                Gson gson = new Gson();
-                result.add(gson.toJson(r));
+                result.add(r);
             }
 
             return result;
@@ -355,9 +328,9 @@ public class Search
      */
     public static List<String> _split(String text) throws IOException
     {
-        if (Search.config.disable_mmseg)
+        if (!SearchConfig.use_mmseg)
             return Arrays.asList(text.split(" "));
-        Seg seg = new ComplexSeg(dic);
+        Seg seg = new ComplexSeg(SearchConfig.dic);
         MMSeg mmSeg = new MMSeg(new StringReader(text), seg);
         List<String> words = new ArrayList<String>();
         Word word = null;

@@ -12,44 +12,57 @@ import org.apache.commons.lang.StringUtils;
 import redis.clients.jedis.Jedis;
 
 import com.google.gson.Gson;
-import com.sun.tools.jdi.LinkedHashMap;
 
 public class Index
 {
-    String type;
+   public String type;
 
-    String title;
+   public String title;
 
-    String id;
+   public String id;
 
-    String score;
+   public String score;
 
-    Set<String> aliases;
+   public Set<String> aliases ;
 
-    Map<String, String> exts;
+   public Map<String, String> exts;
 
-    List<String> condition_fields;
+   public List<String> condition_fields;
 
-    boolean prefix_index_enable = true;
+   public Boolean prefix_index_enable = true;
 
-    Jedis jedis;
+   public Jedis jedis;
 
-    public Index(LinkedHashMap options)
+    public Index(Map options)
     {
-        this.condition_fields = (List<String>) options.get("condition_fields");
-        this.exts = (Map<String, String>) options.get("exts");
-        this.aliases = (Set<String>) options.get("aliases");
-        this.prefix_index_enable = (Boolean) options.get("prefix_index_enable");
+        this.condition_fields = (List<String>) (options.get("condition_fields")== null ? new ArrayList<String>() : options.get("condition_fields"));
+        this.exts = (Map<String, String>) (options.get("exts") == null ? new HashMap<String, String>() : options.get("exts"));
+        this.aliases = (Set<String>) (options.get("aliases") == null ? new HashSet<String>() : options.get("aliases"));
+        this.prefix_index_enable = (Boolean)(options.get("prefix_index_enable") == null ? true : options.get("prefix_index_enable"));
         this.type = (String) options.get("type");
         this.title = (String) options.get("title");
         this.id = (String) options.get("id");
         this.score = (String) options.get("score");
-
         this.aliases.add(this.title);
 
-        jedis = Search.configure().redisPool.getResource();
+        jedis = SearchConfig.redisPool.getResource();
     }
 
+//    public Index(String type, String id, String title, String score, Map<String, String>  exts ,
+//                                    List<String> condition_fields, boolean prefix_index_enable)
+//    {
+//        this.condition_fields = condition_fields;
+//        this.prefix_index_enable = prefix_index_enable;
+//        this.type = type;
+//        this.title = title;
+//        this.id = id;
+//        this.score = score;
+//        this.aliases.add(this.title);
+//
+//        Search.configure();
+//        jedis = SearchConfig.redisPool.getResource();
+//    }
+    
     /**
      * 保存
      * @throws Exception
@@ -67,7 +80,7 @@ public class Index
 
         Gson gson = new Gson();
 
-        Long res = jedis.hset(this.type, this.id, gson.toJson(data).toString());
+        jedis.hset(this.type, this.id, gson.toJson(data).toString());
 
         for (String field : condition_fields)
         {
@@ -102,7 +115,7 @@ public class Index
     public static void remove(Map options) throws Exception
     {
         String type = (String) options.get("type");
-        Jedis jedis = Search.configure().redisPool.getResource();
+        Jedis jedis = SearchConfig.redisPool.getResource();
         jedis.hdel(type, (String) options.get("id"));
         Set<String> words = split_words_for_index((String) options.get("title"));
         for (String word : words)
@@ -122,7 +135,7 @@ public class Index
     public static Set<String> split_words_for_index(String title) throws Exception
     {
         List<String> words = Search.split(title);
-        if (Search.configure().pinyin_match)
+        if (SearchConfig.pinyin_match)
         {
             List<String> pinyin_full = Search.split_pinyin(title);
             StringBuffer pinyin_first = new StringBuffer();
@@ -148,7 +161,7 @@ public class Index
             List<String> words = new ArrayList<String>();
             words.add(val.toLowerCase());
             jedis.sadd(Search.mk_sets_key(this.type, val), this.id);
-            if (Search.configure().pinyin_match)
+            if (SearchConfig.pinyin_match)
             {
                 List<String> pinyin_full = Search.split_pinyin(val.toLowerCase());
                 StringBuffer pinyin_first = new StringBuffer();

@@ -31,18 +31,18 @@ public class JedisHolder
     private void initJedisPoolConfig()
     {
         jedisPoolConfig = new JedisPoolConfig();
-        jedisPoolConfig.setMaxActive(Constants.POOL_MAXACTIVIE);
-        jedisPoolConfig.setMaxIdle(Constants.POOL_MAXIDLE);
-        jedisPoolConfig.setMinIdle(Constants.POOL_MINIDLE);
-        jedisPoolConfig.setMaxWait(Constants.POOL_MAXWAIT);
+        jedisPoolConfig.setMaxActive(SearchConfig.POOL_MAXACTIVIE);
+        jedisPoolConfig.setMaxIdle(SearchConfig.POOL_MAXIDLE);
+        jedisPoolConfig.setMinIdle(SearchConfig.POOL_MINIDLE);
+        jedisPoolConfig.setMaxWait(SearchConfig.POOL_MAXWAIT);
 
-        jedisPoolConfig.setTestOnBorrow(Constants.POOL_TESTONBORROW);
-        jedisPoolConfig.setTestOnReturn(Constants.POOL_TESTONRETURN);
-        jedisPoolConfig.setTestWhileIdle(Constants.POOL_TESTWHILEIDLE);
+        jedisPoolConfig.setTestOnBorrow(SearchConfig.POOL_TESTONBORROW);
+        jedisPoolConfig.setTestOnReturn(SearchConfig.POOL_TESTONRETURN);
+        jedisPoolConfig.setTestWhileIdle(SearchConfig.POOL_TESTWHILEIDLE);
 
-        jedisPoolConfig.setNumTestsPerEvictionRun(Constants.POOL_NUMTESTSPEREVICTIONRUN);
-        jedisPoolConfig.setMinEvictableIdleTimeMillis(Constants.POOL_MINEVICTABLEIDLETIMEMILLIS);
-        jedisPoolConfig.setTimeBetweenEvictionRunsMillis(Constants.POOL_TIMEBETWEENEVICTIONRUNSMILLIS);
+        jedisPoolConfig.setNumTestsPerEvictionRun(SearchConfig.POOL_NUMTESTSPEREVICTIONRUN);
+        jedisPoolConfig.setMinEvictableIdleTimeMillis(SearchConfig.POOL_MINEVICTABLEIDLETIMEMILLIS);
+        jedisPoolConfig.setTimeBetweenEvictionRunsMillis(SearchConfig.POOL_TIMEBETWEENEVICTIONRUNSMILLIS);
     }
 
     private JedisPool getJedisPool(String key, JedisPool jedisPool)
@@ -108,15 +108,5 @@ public class JedisHolder
             return true;
         }
         return false;
-    }
-
-    public static void main(String args[])
-    {
-        JedisHolder holder = JedisHolder.singleton();
-        JedisPool jp = holder.getJedisPoolInstance("localhost");
-
-        JedisHolder holder1 = JedisHolder.singleton();
-        JedisPool jp1 = holder1.getJedisPoolInstance("localhost");
-
     }
 }
